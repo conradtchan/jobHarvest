@@ -40,7 +40,7 @@ dryrun = 0
 secretFile = '/root/.lustreHarvest.secret'
 
 # influx credentials file (if file doesn't exist, influx is disabled):
-influxConfigFile = '/root/jobHarvest.influx'
+influxConfigFile = '/root/.jobHarvest.influx'
 # Template:
 #
 # http://server_address:port
