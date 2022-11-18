@@ -39,6 +39,16 @@ dryrun = 0
 # shared secret between client and servers. only readable by root
 secretFile = '/root/.lustreHarvest.secret'
 
+# influx credentials file (if file doesn't exist, influx is disabled):
+influxConfigFile = '/root/jobHarvest.influx'
+# Template:
+#
+# http://server_address:port
+# org_name
+# bucket_name
+# token
+influxConfig = None
+
 dt = 60.0/clientSend
 secretText = None
 
@@ -677,6 +687,9 @@ def serverCode( serverName, port ):
    jobArrayMap_copy = {}
    tmeta = {}
 
+   # if new data, then push to influx
+   newData = False
+
    while inputs:
       # Wait for at least one of the sockets to be ready for processing
       #print >>sys.stderr, '\nwaiting for the next event'
@@ -689,6 +702,8 @@ def serverCode( serverName, port ):
          # if the interval is long then just wait 5s, otherwise wait dt/2
          loopTime = time.time()
          if not processed and loopTime - loopTimeLast > min(5.0, dt/2):
+             newData = True
+
              # process the raw job_stats files to dicts
              parseOss(o)
 
@@ -953,6 +968,13 @@ def serverCode( serverName, port ):
          # any new client appearing or old client disappearing will screw up rates
          first = 1
 
+      # Write data to InfluxDB
+      if influxConfig is not None and newData:
+         influxWrite(r, jobArrayMap)
+         newData = False
+
+
+
 def syncToNextInterval( offset = 0 ):
    # sleep until the next interval
    t = time.time() % 60
@@ -1080,10 +1102,76 @@ def parseArgs( host ):
       usage()
    return sys.argv[1], sys.argv[2:]
 
+
+def readInfluxConfig():
+   global influxConfig
+
+   if os.path.isfile(influxConfigFile):
+      with open(influxConfigFile) as f:
+         l = [x.strip() for x in f.readlines()]
+      influxConfig = {
+         'server': l[0],
+         'org': l[1],
+         'bucket': l[2],
+         'token': l[3],
+      }
+      print(f'influxDB config file read: {influxConfigFile}')
+
+   else:
+      print(f'{influxConfigFile} does not exist, disabling influx writing')
+      # if file doesn't exist, turn off writing to influx
+      influxConfig = None
+
+
+def influxWrite(r, jobArrayMap):
+   from influxdb_client import InfluxDBClient
+
+   print(f"writing data to {influxConfig['server']}")
+
+   client = InfluxDBClient(
+      url=influxConfig['server'],
+      token=influxConfig['token'],
+      org=influxConfig['org'],
+   )
+
+   influxConfig['server']
+
+   write_api = client.write_api()
+
+   for jobid in r:
+      for fs in r[jobid]:
+         for measurement in r[jobid][fs]:
+
+            # Copy the fields and pop 'snapshot_time'
+            # This prevents the original dict from being modified
+            fields = copy.deepcopy(r[jobid][fs][measurement])
+            t = fields.pop('snapshot_time')
+
+            data = [
+               {
+                  'measurement': measurement,
+                  'tags': {'job': jobArrayMap[jobid]},
+                  'fields': fields,
+                  'time': t,
+               }
+            ]
+
+            # Dictionary-style write
+            write_api.write(
+               influxConfig['bucket'],
+               influxConfig['org'],
+               data,
+               write_precision='s'
+            )
+
+   # Flush writes
+   write_api.close()
+
 if __name__ == '__main__':
    host = socket.gethostname()
    serverName, fsList = parseArgs( host )
    readSecret()
+   readInfluxConfig()
    if host == serverName:
       if serverInterfaceName != None:
           serverName = serverInterfaceName
