@@ -1150,7 +1150,7 @@ def influxWrite(r, jobArrayMap):
             data = [
                {
                   'measurement': measurement,
-                  'tags': {'job': jobArrayMap[jobid]},
+                  'tags': {'job': jobArrayMap[jobid], 'fs': fs},
                   'fields': fields,
                   'time': t,
                }
