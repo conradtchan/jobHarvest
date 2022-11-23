@@ -970,7 +970,7 @@ def serverCode( serverName, port ):
 
       # Write data to InfluxDB
       if influxConfig is not None and newData:
-         influxWrite(r, jobArrayMap)
+         influxWrite(jSum, jobArrayMap)
          newData = False
 
 
@@ -1123,7 +1123,7 @@ def readInfluxConfig():
       influxConfig = None
 
 
-def influxWrite(r, jobArrayMap):
+def influxWrite(jSum, jobArrayMap):
    from influxdb_client import InfluxDBClient
 
    print(f"writing data to {influxConfig['server']}")
@@ -1138,13 +1138,13 @@ def influxWrite(r, jobArrayMap):
 
    write_api = client.write_api()
 
-   for jobid in r:
-      for fs in r[jobid]:
-         for measurement in r[jobid][fs]:
+   for jobid in jSum:
+      for fs in jSum[jobid]:
+         for measurement in jSum[jobid][fs]:
 
             # Copy the fields and pop 'snapshot_time'
             # This prevents the original dict from being modified
-            fields = copy.deepcopy(r[jobid][fs][measurement])
+            fields = copy.deepcopy(jSum[jobid][fs][measurement])
             t = fields.pop('snapshot_time')
 
             data = [
