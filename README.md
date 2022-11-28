@@ -12,7 +12,7 @@ various levels of detail in the aggregated data are available from jobHarvest.
 Requirements
 ------------
 
-jobHarvest requires pyslurm be available on the aggregation host in order to track the life cycle of slurm jobs.
+jobHarvest requires pyslurm be available on the aggregation host in order to track the life cycle of slurm jobs. influxdb-client is required to enable writing to InfluxDB.
 
 How it Works
 ------------
@@ -31,3 +31,13 @@ data is transferred by sending serialised python objects over simple TCP connect
 
 jobHarvest transparently handles client and server process disconnections and restarts (eg. OSS reboots).
 
+Writing to InfluxDB
+-------------------
+Creating an config file at `/root/.jobHarvest.influx` containing
+
+    http://server_address:port
+    org_name
+    bucket_name
+    token
+
+will enable writing to InfluxDB.
