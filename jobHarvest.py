@@ -13,7 +13,7 @@
 #       - handle the case where various {ost,mdt} don't talk to jobid for a
 #         while (typically >600s), and so the jobstats disappear. if/when they come back
 #         they reset to zero. so we need to track comings and goings and timestamps.
-# 
+#
 #   (c) Robin Humble - Thu May  5 18:31:06 AEST 2022
 
 # read lustre OSTs eg.
@@ -184,7 +184,7 @@ def parseOss(o):
 
             for i in dd:
                #print('i',i)
-               ii = i.strip().split() 
+               ii = i.strip().split()
                if len(ii) > 0 and ii[0] == 'job_stats:':  # skip the first line
                   continue
                if len(ii) == 0:  # EOF. process final job
@@ -428,7 +428,7 @@ def shortJobRates(r, high, allFs):
             for i in high[typ].keys():
                s[j][fs][typ][i] = 0.0
                if fs in r[j].keys() and typ in r[j][fs].keys() and i in r[j][fs][typ].keys():
-                  s[j][fs][typ][i] = r[j][fs][typ][i] 
+                  s[j][fs][typ][i] = r[j][fs][typ][i]
    return s
 
 def superShortJobRates(r, high, allFs):   # @@@ need to add allFs code to the below
@@ -443,7 +443,7 @@ def superShortJobRates(r, high, allFs):   # @@@ need to add allFs code to the be
                   s[j][typ] = {}
                for i in high[typ].keys():
                   if i in r[j][fs][typ].keys():
-                     s[j][typ][i] = r[j][fs][typ][i] 
+                     s[j][typ][i] = r[j][fs][typ][i]
    return s
 
 def fsRate(r, high):
@@ -572,7 +572,7 @@ def parseCpuList( cpus ):
         else:            # found a single
             if i[0] != '.':  # found a , "..." sigh
                c.append(int(i))
-    return c        
+    return c
 
 def updateJobArrayMap(t, job_map, slurmjobs):
    """map jobids eg. '12366' to '12345_10'"""
@@ -603,7 +603,7 @@ def updateJobArrayMap(t, job_map, slurmjobs):
             continue
 
          sj = slurmjobs[int(j)]
-         if sj['array_task_id'] != None and sj['array_job_id'] != None: 
+         if sj['array_task_id'] != None and sj['array_job_id'] != None:
             # running/completed array tasks
             job_map[j] = '%d_%d' % (sj['array_job_id'], sj['array_task_id'])
          else:
@@ -615,7 +615,7 @@ def updateJobArrayMap(t, job_map, slurmjobs):
 
    #print('warning: ', len(jobsmissed), 'jobs not found in slurmctld. oldest is %.2f' % (time.time()-tmin), 'newest is %.2f' % (time.time()-tmax))
    #print('jobsmissed', jobsmissed)
-   #sys.exit(0)   
+   #sys.exit(0)
 
    db = pyslurm.slurmdb_jobs()
    dbjobs = db.get(jobids=jobsmissed)
@@ -625,7 +625,7 @@ def updateJobArrayMap(t, job_map, slurmjobs):
          jobsmissed2.append(j)
          continue
       sj = dbjobs[int(j)]
-      if sj['array_task_id'] != None and sj['array_job_id'] != None: 
+      if sj['array_task_id'] != None and sj['array_job_id'] != None:
          # running/completed array tasks
          job_map[j] = '%d_%d' % (sj['array_job_id'], sj['array_task_id'])
       else:
@@ -1139,30 +1139,33 @@ def influxWrite(jSum, jobArrayMap):
    write_api = client.write_api()
 
    for jobid in jSum:
-      for fs in jSum[jobid]:
-         for server in jSum[jobid][fs]:
 
-            # Copy the fields and pop 'snapshot_time'
-            # This prevents the original dict from being modified
-            fields = copy.deepcopy(jSum[jobid][fs][server])
-            t = fields.pop('snapshot_time')
+      # If jobid is not in jobArrayMap, then this is not a real slurm job
+      if jobid in jobArrayMap:
+         for fs in jSum[jobid]:
+            for server in jSum[jobid][fs]:
 
-            data = [
-               {
-                  'measurement': 'lustre',
-                  'tags': {'job': jobArrayMap[jobid], 'fs': fs, 'server': server},
-                  'fields': fields,
-                  'time': t,
-               }
-            ]
+               # Copy the fields and pop 'snapshot_time'
+               # This prevents the original dict from being modified
+               fields = copy.deepcopy(jSum[jobid][fs][server])
+               t = fields.pop('snapshot_time')
 
-            # Dictionary-style write
-            write_api.write(
-               influxConfig['bucket'],
-               influxConfig['org'],
-               data,
-               write_precision='s'
-            )
+               data = [
+                  {
+                     'measurement': 'lustre',
+                     'tags': {'job': jobArrayMap[jobid], 'fs': fs, 'server': server},
+                     'fields': fields,
+                     'time': t,
+                  }
+               ]
+
+               # Dictionary-style write
+               write_api.write(
+                  influxConfig['bucket'],
+                  influxConfig['org'],
+                  data,
+                  write_precision='s'
+               )
 
    # Flush writes
    write_api.close()
