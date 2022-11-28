@@ -1140,17 +1140,17 @@ def influxWrite(jSum, jobArrayMap):
 
    for jobid in jSum:
       for fs in jSum[jobid]:
-         for measurement in jSum[jobid][fs]:
+         for server in jSum[jobid][fs]:
 
             # Copy the fields and pop 'snapshot_time'
             # This prevents the original dict from being modified
-            fields = copy.deepcopy(jSum[jobid][fs][measurement])
+            fields = copy.deepcopy(jSum[jobid][fs][server])
             t = fields.pop('snapshot_time')
 
             data = [
                {
-                  'measurement': measurement,
-                  'tags': {'job': jobArrayMap[jobid], 'fs': fs},
+                  'measurement': 'lustre',
+                  'tags': {'job': jobArrayMap[jobid], 'fs': fs, 'server': server},
                   'fields': fields,
                   'time': t,
                }
