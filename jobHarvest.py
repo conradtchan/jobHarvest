@@ -294,7 +294,8 @@ def findGone(t, tPrev):
                continue
 
             if backwards and dt < jobStatsExpiry:
-               print('error: j,tgt',j,tgt,'dt',dt,'backwards',backwards)
+               if verbose:
+                  print('error: j,tgt',j,tgt,'dt',dt,'backwards',backwards)
 
             if dt > jobStatsExpiry:   # backwards should always be accompanied by expired dt
                if backwards:
@@ -308,7 +309,8 @@ def findGone(t, tPrev):
                      print('   tPrev',tPrev[tgt][j])
                      print('       t',t[tgt][j])
 
-   print('dtmax', dtmax, 'dtmax backwards', dtmax_backwards, 'dtmax without going backwards', dtmax_nonbackwards)
+   if verbose:
+      print('dtmax', dtmax, 'dtmax backwards', dtmax_backwards, 'dtmax without going backwards', dtmax_nonbackwards)
 
    return gone
 
@@ -461,15 +463,18 @@ def fsRate(r, high):
 
    # print based on things we flag as interesting in 'high'
    for fs in fsSum.keys():
-      print('fs', fs, end='')
+      if verbose:
+         print('fs', fs, end='')
       for typ in high.keys():
          for i in high[typ].keys():
             if typ not in fsSum[fs].keys():
                continue
             if i not in fsSum[fs][typ].keys():
                continue
-            print(' %s %s %.0f' % (typ, i, fsSum[fs][typ][i]), end='')
-      print('')
+            if verbose:
+               print(' %s %s %.0f' % (typ, i, fsSum[fs][typ][i]), end='')
+      if verbose:
+         print('')
    return fsSum
 
 def checkNegative(err, t, tPrev, tLong, tmeta):
@@ -528,7 +533,8 @@ def forgetOldJobs(tLong, lastSaw, job_map):
    for j, ts in lastSaw.items():
       if ts < old:
          oldJobs.append(j)
-   print('deleting', len(oldJobs), 'jobs from tLong')
+   if verbose:
+      print('deleting', len(oldJobs), 'jobs from tLong')
 
    # del from tLong
    for tgt in tLong.keys():
@@ -641,7 +647,8 @@ def remapSrByJobsMap(sr, jobArrayMap):
    s = {}
    for j in sr.keys():
       if j not in jobArrayMap.keys():
-         print('skipping SrMap of (hopefully) old job', j)
+         if verbose:
+            print('skipping SrMap of (hopefully) old job', j)
          continue
       s[jobArrayMap[j]] = sr[j]
    return s
@@ -764,7 +771,8 @@ def serverCode( serverName, port ):
 
              # print some jobs with high rates
              high = { 'mds':{'iops':100}, 'oss':{'iops':30, 'read_bytes':10**8, 'write_bytes':10**8}}
-             printJobRates(r, high)
+             if verbose:
+                printJobRates(r, high)
 
              # make a short version of rates with just fields from 'high' in it.
              # also for each job, expand the filesystem list to be all fs's to make the client's job easier
@@ -778,8 +786,9 @@ def serverCode( serverName, port ):
              #   doesn't include new jobs or jobs that have exited. ie. must be in both jSum and jSumPrev
              fsSum = fsRate(r, high)
 
-             print('tracking',len(jSum),'jobs')
-             print('time', time.strftime("%Y-%m-%d %H:%M:%S"))
+             if verbose:
+                print('tracking',len(jSum),'jobs')
+                print('time', time.strftime("%Y-%m-%d %H:%M:%S"))
 
              # all jobs in tLong have been in t.
              # most/all jobs on the cluster should appear in t as they should all do some i/o.
@@ -850,9 +859,11 @@ def serverCode( serverName, port ):
             first = 1
          elif s is jserver:
             connection, client_address = s.accept()
-            print('new json connection from', client_address, file=sys.stderr)
+            if verbose:
+               print('new json connection from', client_address, file=sys.stderr)
             reqtype = connection.recv(1)
-            print('reqtype', reqtype, 'type', type(reqtype))
+            if verbose:
+               print('reqtype', reqtype, 'type', type(reqtype))
             if not first:
                if reqtype == b'a':  # plain jSum
                   j = json.dumps(jSum)
@@ -866,7 +877,8 @@ def serverCode( serverName, port ):
                elif reqtype == b'e':  # fs totals
                   j = json.dumps(fsSum)
                n = connection.send(j.encode('ascii'))
-               print('sent n',n, 'len(j)',len(j))
+               if verbose:
+                  print('sent n',n, 'len(j)',len(j))
             connection.close()
          else:
             data = s.recv(102400)
@@ -1126,7 +1138,8 @@ def readInfluxConfig():
 def influxWrite(jSum, jobArrayMap):
    from influxdb_client import InfluxDBClient
 
-   print(f"writing data to {influxConfig['server']}")
+   if verbose:
+      print(f"writing data to {influxConfig['server']}")
 
    client = InfluxDBClient(
       url=influxConfig['server'],
