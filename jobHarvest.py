@@ -1151,34 +1151,36 @@ def influxWrite(jSum, jobArrayMap):
 
    write_api = client.write_api()
 
+   data = []
+
    for jobid in jSum:
 
       # If jobid is not in jobArrayMap, then this is not a real slurm job
       if jobid in jobArrayMap:
          for fs in jSum[jobid]:
             for server in jSum[jobid][fs]:
+               lustre_fields = jSum[jobid][fs][server]
 
-               # Copy the fields and pop 'snapshot_time'
-               # This prevents the original dict from being modified
-               fields = copy.deepcopy(jSum[jobid][fs][server])
-               t = fields.pop('snapshot_time')
+               # Only keep fields used by jobmon
+               jobmon_fields = ["read_bytes", "write_bytes", "iops"]
+               fields = {k: lustre_fields[k] for k in lustre_fields if k in jobmon_fields}
 
-               data = [
+               data += [
                   {
                      'measurement': 'lustre',
                      'tags': {'job': jobArrayMap[jobid], 'fs': fs, 'server': server},
                      'fields': fields,
-                     'time': t,
+                     'time': lustre_fields["snapshot_time"],
                   }
                ]
 
-               # Dictionary-style write
-               write_api.write(
-                  influxConfig['bucket'],
-                  influxConfig['org'],
-                  data,
-                  write_precision='s'
-               )
+   # Dictionary-style write
+   write_api.write(
+      influxConfig['bucket'],
+      influxConfig['org'],
+      data,
+      write_precision='s'
+   )
 
    # Flush writes
    write_api.close()
