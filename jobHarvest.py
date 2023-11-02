@@ -830,6 +830,8 @@ def serverCode( serverName, port ):
              jobArrayMap_copy = dict(jobArrayMap)
              forgetOldJobs(tLong, lastSaw, jobArrayMap_copy)
 
+             jSumDelta = getjSumDelta(jSum, jSumPrev)
+
              tPrev = t
              jSumPrev = jSum
              jSumPrevTime = jSumTime
@@ -982,7 +984,7 @@ def serverCode( serverName, port ):
 
       # Write data to InfluxDB
       if influxConfig is not None and newData:
-         influxWrite(jSum, jobArrayMap)
+         influxWrite(jSumDelta, jobArrayMap)
          newData = False
 
 
@@ -1134,8 +1136,38 @@ def readInfluxConfig():
       # if file doesn't exist, turn off writing to influx
       influxConfig = None
 
+def getjSumDelta(jSum, jSumPrev):
+   # jSum contains all historical data points - calculate the delta between the previous and current data
+   jSumDelta = {}
+   for jobid in jSum.keys():
+      if jobid not in jSumPrev.keys():
+         # If the jobid was not in the previous data, then all points are new
+         jSumDelta[jobid] = jSum[jobid]
+         continue
+      else:
+         jSumDelta[jobid] = {}
 
-def influxWrite(jSum, jobArrayMap):
+         for fs in jSum[jobid].keys():
+            # If the fs was not in the previous data, then all points are new
+            if fs not in jSumPrev[jobid].keys():
+               jSumDelta[jobid][fs] = jSum[jobid][fs]
+               continue
+            else:
+               jSumDelta[jobid][fs] = {}
+
+            for server in jSum[jobid][fs].keys():
+               # If the server was not in the previous data, then that point is new
+               if server not in jSumPrev[jobid][fs].keys():
+                  jSumDelta[jobid][fs][server] = jSum[jobid][fs][server]
+                  continue
+
+               # Otherwise, check the timestamp to see if that point is new
+               elif jSum[jobid][fs][server]["snapshot_time"] > jSumPrev[jobid][fs][server]["snapshot_time"]:
+                     jSumDelta[jobid][fs][server] = jSum[jobid][fs][server]
+
+   return jSumDelta
+
+def influxWrite(jSumDelta, jobArrayMap):
    from influxdb_client import InfluxDBClient
 
    if verbose:
@@ -1153,26 +1185,40 @@ def influxWrite(jSum, jobArrayMap):
 
    data = []
 
-   for jobid in jSum:
+   # Send the new points to InfluxDB
+   for jobid in jSumDelta:
 
       # If jobid is not in jobArrayMap, then this is not a real slurm job
       if jobid in jobArrayMap:
-         for fs in jSum[jobid]:
-            for server in jSum[jobid][fs]:
-               lustre_fields = jSum[jobid][fs][server]
+         for fs in jSumDelta[jobid]:
+            for server in jSumDelta[jobid][fs]:
+               lustre_fields = jSumDelta[jobid][fs][server]
 
-               # Only keep fields used by jobmon
-               jobmon_fields = ["read_bytes", "write_bytes", "iops"]
-               fields = {k: lustre_fields[k] for k in lustre_fields if k in jobmon_fields}
+               # Get current timestamp
+               now = time.time()
+               diff = int(now - lustre_fields["snapshot_time"])
 
-               data += [
-                  {
-                     'measurement': 'lustre',
-                     'tags': {'job': jobArrayMap[jobid], 'fs': fs, 'server': server},
-                     'fields': fields,
-                     'time': lustre_fields["snapshot_time"],
-                  }
-               ]
+               # If the data is more than 1 hour old, print a warning and don't send to influx
+               cutoff_time = 3600
+               if diff > cutoff_time:
+                  print(f'warning: jobstats for {jobid} are {diff} seconds old, not sending to influx')
+
+               else:
+                  # Only keep fields used by jobmon
+                  jobmon_fields = ["read_bytes", "write_bytes", "iops"]
+                  fields = {k: lustre_fields[k] for k in lustre_fields if k in jobmon_fields}
+
+                  data += [
+                     {
+                        'measurement': 'lustre',
+                        'tags': {'job': jobArrayMap[jobid], 'fs': fs, 'server': server},
+                        'fields': fields,
+                        'time': lustre_fields["snapshot_time"],
+                     }
+                  ]
+
+   if verbose:
+      print(f"writing {len(data)} data points to influx")
 
    # Dictionary-style write
    write_api.write(
